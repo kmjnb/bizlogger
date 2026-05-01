@@ -1,4 +1,4 @@
-FROM huecker.io/library/python:3.11-slim
+FROM huecker.io/library/python:3.11-alpine
 
 WORKDIR /app
 
@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# asyncpg has a manylinux wheel; aiogram is pure-Python. No build deps required on alpine.
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
