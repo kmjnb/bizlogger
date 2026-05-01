@@ -1,4 +1,4 @@
-FROM huecker.io/library/python:3.11-alpine
+FROM m.daocloud.io/docker.io/library/python:3.11-alpine
 
 WORKDIR /app
 
