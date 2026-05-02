@@ -23,8 +23,16 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - MEDIA_DIR=${MEDIA_DIR:-/app/storage/media}
       - BOT_PROXY_URL=http://xray:1080
+    networks:
+      - default
+      - polysignals-db
     volumes:
       - bizlogger-storage:/app/storage
+
+networks:
+  polysignals-db:
+    name: xrg54p5rlyce3v7b6gzufpho
+    external: true
 
 volumes:
   bizlogger-storage:
