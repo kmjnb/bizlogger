@@ -25,13 +25,12 @@ services:
       - BOT_PROXY_URL=http://xray:1080
     networks:
       - default
-      - polysignals-db
+      - coolify
     volumes:
       - bizlogger-storage:/app/storage
 
 networks:
-  polysignals-db:
-    name: xrg54p5rlyce3v7b6gzufpho
+  coolify:
     external: true
 
 volumes:
