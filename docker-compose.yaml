@@ -1,0 +1,30 @@
+services:
+  xray:
+    build:
+      context: ./xray
+    restart: unless-stopped
+    environment:
+      - VLESS_UUID=${VLESS_UUID}
+      - VLESS_HOST=${VLESS_HOST}
+      - VLESS_PORT=${VLESS_PORT:-443}
+      - VLESS_SNI=${VLESS_SNI}
+    expose:
+      - "1080"
+
+  bot:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      - xray
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - DATABASE_URL=${DATABASE_URL}
+      - MEDIA_DIR=${MEDIA_DIR:-/app/storage/media}
+      - BOT_PROXY_URL=http://xray:1080
+    volumes:
+      - bizlogger-storage:/app/storage
+
+volumes:
+  bizlogger-storage:

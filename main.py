@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.db import Db
@@ -22,9 +24,20 @@ async def main() -> None:
     db = Db(DATABASE_URL)
     await db.init()
 
-    bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    proxy_url = os.environ.get("BOT_PROXY_URL") or None
+    session = AiohttpSession(proxy=proxy_url) if proxy_url else None
+
+    bot = Bot(
+        BOT_TOKEN,
+        session=session,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
     me = await bot.get_me()
-    log.info("Logged in as @%s (id=%s, can_join_groups=%s)", me.username, me.id, me.can_join_groups)
+    log.info(
+        "Logged in as @%s (id=%s, can_join_groups=%s) via %s",
+        me.username, me.id, me.can_join_groups,
+        proxy_url or "direct",
+    )
 
     dp = Dispatcher()
     dp.include_router(setup(db))
