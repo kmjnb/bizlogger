@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.filters import CommandStart
 from aiogram.types import (
     BusinessConnection,
     BusinessMessagesDeleted,
@@ -119,22 +120,43 @@ def _sender(msg: Message) -> tuple[int | None, str | None]:
     return u.id, name
 
 
-@router.message(F.chat.type == "private")
-async def on_private_message(msg: Message) -> None:
-    """Track everyone who DMs the bot in private — populates bot_users for the admin.
-    Skip the upsert (and any other side effect) for users marked is_blocked in the admin."""
+async def _track_dm_sender(msg: Message) -> bool:
+    """Upsert the DM sender into bot_users. Returns False if the user is blocked
+    (in which case the caller should drop the message without further side effects)."""
     assert _db is not None
     u = msg.from_user
     if u is None or u.is_bot:
-        return
+        return False
     if await _db.is_user_blocked(u.id):
-        return
+        return False
     await _db.track_bot_user(
         user_id=u.id,
         username=u.username,
         full_name=u.full_name or None,
         language_code=u.language_code,
     )
+    return True
+
+
+@router.message(CommandStart(), F.chat.type == "private")
+async def on_start(msg: Message, bot: Bot) -> None:
+    if not await _track_dm_sender(msg):
+        return
+    name = msg.from_user.first_name if msg.from_user else "👋"
+    await bot.send_message(
+        msg.chat.id,
+        f"Привет, {escape(name)}! Я бот-логгер для Telegram Business — фиксирую "
+        f"сообщения в подключённых business-чатах, в том числе изменения, удаления "
+        f"и одноразовое медиа.\n\n"
+        f"Чтобы я начал работать, подключи меня в настройках Business у себя в "
+        f"Telegram (Настройки → Business → Чат-боты), и я покажу что вижу.",
+    )
+
+
+@router.message(F.chat.type == "private")
+async def on_private_message(msg: Message) -> None:
+    """Track everyone who DMs the bot in private — populates bot_users for the admin."""
+    await _track_dm_sender(msg)
 
 
 @router.business_connection()
