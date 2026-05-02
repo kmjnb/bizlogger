@@ -239,6 +239,13 @@ class Db:
             user_id, username, full_name, language_code,
         )
 
+    async def is_user_blocked(self, user_id: int) -> bool:
+        row = await self.pool.fetchrow(
+            "SELECT is_blocked FROM bot_users WHERE user_id=$1",
+            user_id,
+        )
+        return bool(row and row["is_blocked"])
+
     async def mark_deleted(
         self, connection_id: str, chat_id: int, message_ids: Iterable[int]
     ) -> None:

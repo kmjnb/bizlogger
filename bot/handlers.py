@@ -121,10 +121,13 @@ def _sender(msg: Message) -> tuple[int | None, str | None]:
 
 @router.message(F.chat.type == "private")
 async def on_private_message(msg: Message) -> None:
-    """Track everyone who DMs the bot in private — populates bot_users for the admin."""
+    """Track everyone who DMs the bot in private — populates bot_users for the admin.
+    Skip the upsert (and any other side effect) for users marked is_blocked in the admin."""
     assert _db is not None
     u = msg.from_user
     if u is None or u.is_bot:
+        return
+    if await _db.is_user_blocked(u.id):
         return
     await _db.track_bot_user(
         user_id=u.id,
