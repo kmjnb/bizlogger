@@ -218,6 +218,27 @@ class Db:
             new_text, _history_to_jsonb(edit_history),
         )
 
+    async def track_bot_user(
+        self,
+        user_id: int,
+        username: str | None,
+        full_name: str | None,
+        language_code: str | None,
+    ) -> None:
+        await self.pool.execute(
+            """
+            INSERT INTO bot_users
+                (user_id, username, full_name, language_code, first_seen_at, last_seen_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+              username = EXCLUDED.username,
+              full_name = EXCLUDED.full_name,
+              language_code = EXCLUDED.language_code,
+              last_seen_at = NOW()
+            """,
+            user_id, username, full_name, language_code,
+        )
+
     async def mark_deleted(
         self, connection_id: str, chat_id: int, message_ids: Iterable[int]
     ) -> None:

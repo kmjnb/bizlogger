@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from html import escape
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.types import (
     BusinessConnection,
     BusinessMessagesDeleted,
@@ -117,6 +117,21 @@ def _sender(msg: Message) -> tuple[int | None, str | None]:
         return None, None
     name = u.full_name or (u.username and f"@{u.username}") or str(u.id)
     return u.id, name
+
+
+@router.message(F.chat.type == "private")
+async def on_private_message(msg: Message) -> None:
+    """Track everyone who DMs the bot in private — populates bot_users for the admin."""
+    assert _db is not None
+    u = msg.from_user
+    if u is None or u.is_bot:
+        return
+    await _db.track_bot_user(
+        user_id=u.id,
+        username=u.username,
+        full_name=u.full_name or None,
+        language_code=u.language_code,
+    )
 
 
 @router.business_connection()
