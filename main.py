@@ -9,6 +9,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
+from bot.broadcaster import Broadcaster
 from bot.db import Db
 from bot.handlers import setup
 from config import BOT_TOKEN, DATABASE_URL
@@ -42,6 +43,9 @@ async def main() -> None:
     dp = Dispatcher()
     dp.include_router(setup(db))
 
+    broadcaster = Broadcaster(bot, db.pool)
+    broadcaster.start()
+
     log.info("Starting long polling…")
     try:
         await dp.start_polling(
@@ -55,6 +59,7 @@ async def main() -> None:
             ],
         )
     finally:
+        await broadcaster.stop()
         await bot.session.close()
         await db.close()
 
