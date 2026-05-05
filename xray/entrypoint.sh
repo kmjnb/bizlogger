@@ -14,4 +14,4 @@ envsubst '${VLESS_UUID} ${VLESS_HOST} ${VLESS_PORT} ${VLESS_SNI} ${VLESS_PBK} ${
   < /etc/xray/config.template.json \
   > /etc/xray/config.json
 
-exec /usr/local/bin/xray run -c /etc/xray/config.json
+exec xray run -c /etc/xray/config.json
