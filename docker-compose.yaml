@@ -13,6 +13,11 @@ services:
       - VLESS_FP=${VLESS_FP:-chrome}
     expose:
       - "1080"
+    networks:
+      default:
+      coolify:
+        aliases:
+          - bizlogger-xray
 
   bot:
     build:
