@@ -8,6 +8,9 @@ services:
       - VLESS_HOST=${VLESS_HOST}
       - VLESS_PORT=${VLESS_PORT:-443}
       - VLESS_SNI=${VLESS_SNI}
+      - VLESS_PBK=${VLESS_PBK}
+      - VLESS_SID=${VLESS_SID}
+      - VLESS_FP=${VLESS_FP:-chrome}
     expose:
       - "1080"
 

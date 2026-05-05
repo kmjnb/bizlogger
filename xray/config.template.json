@@ -30,11 +30,13 @@
       },
       "streamSettings": {
         "network": "tcp",
-        "security": "tls",
-        "tlsSettings": {
-          "allowInsecure": false,
-          "alpn": ["http/1.1", "h2"],
-          "serverName": "${VLESS_SNI}"
+        "security": "reality",
+        "realitySettings": {
+          "fingerprint": "${VLESS_FP}",
+          "publicKey": "${VLESS_PBK}",
+          "serverName": "${VLESS_SNI}",
+          "shortId": "${VLESS_SID}",
+          "show": false
         }
       },
       "tag": "proxy"

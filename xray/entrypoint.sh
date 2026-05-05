@@ -5,9 +5,12 @@ set -eu
 : "${VLESS_HOST:?VLESS_HOST required}"
 : "${VLESS_PORT:=443}"
 : "${VLESS_SNI:=$VLESS_HOST}"
-export VLESS_UUID VLESS_HOST VLESS_PORT VLESS_SNI
+: "${VLESS_PBK:?VLESS_PBK required (REALITY publicKey)}"
+: "${VLESS_SID:?VLESS_SID required (REALITY shortId)}"
+: "${VLESS_FP:=chrome}"
+export VLESS_UUID VLESS_HOST VLESS_PORT VLESS_SNI VLESS_PBK VLESS_SID VLESS_FP
 
-envsubst '${VLESS_UUID} ${VLESS_HOST} ${VLESS_PORT} ${VLESS_SNI}' \
+envsubst '${VLESS_UUID} ${VLESS_HOST} ${VLESS_PORT} ${VLESS_SNI} ${VLESS_PBK} ${VLESS_SID} ${VLESS_FP}' \
   < /etc/xray/config.template.json \
   > /etc/xray/config.json
 
