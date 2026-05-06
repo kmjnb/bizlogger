@@ -11,3 +11,4 @@ ADMIN_CHAT_ID = int(os.environ["ADMIN_CHAT_ID"])
 DATABASE_URL = os.environ["DATABASE_URL"]
 MEDIA_DIR = Path(os.environ.get("MEDIA_DIR", str(ROOT / "storage/media")))
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+SENTRY_DSN = os.environ.get("SENTRY_DSN") or None

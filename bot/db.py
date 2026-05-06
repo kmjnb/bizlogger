@@ -246,6 +246,98 @@ class Db:
         )
         return bool(row and row["is_blocked"])
 
+    async def get_active_plans(self) -> list[dict]:
+        rows = await self.pool.fetch(
+            """
+            SELECT id, name, stars_price, duration_days
+            FROM subscription_plans
+            WHERE is_active = TRUE
+            ORDER BY stars_price ASC
+            """,
+        )
+        return [dict(r) for r in rows]
+
+    async def get_plan(self, plan_id: int) -> dict | None:
+        row = await self.pool.fetchrow(
+            """
+            SELECT id, name, stars_price, duration_days
+            FROM subscription_plans
+            WHERE id = $1 AND is_active = TRUE
+            """,
+            plan_id,
+        )
+        return dict(row) if row else None
+
+    async def record_subscription(
+        self,
+        user_id: int,
+        stars_amount: int,
+        telegram_charge_id: str,
+        duration_days: int | None,
+    ) -> int:
+        if duration_days is None:
+            row = await self.pool.fetchrow(
+                """
+                INSERT INTO subscriptions
+                    (user_id, stars_amount, telegram_charge_id, status, paid_at, expires_at)
+                VALUES ($1, $2, $3, 'active', NOW(), NULL)
+                RETURNING id
+                """,
+                user_id, stars_amount, telegram_charge_id,
+            )
+        else:
+            row = await self.pool.fetchrow(
+                """
+                INSERT INTO subscriptions
+                    (user_id, stars_amount, telegram_charge_id, status, paid_at, expires_at)
+                VALUES ($1, $2, $3, 'active', NOW(), NOW() + ($4 || ' days')::interval)
+                RETURNING id
+                """,
+                user_id, stars_amount, telegram_charge_id, str(duration_days),
+            )
+        return int(row["id"])
+
+    async def has_active_subscription(self, user_id: int) -> bool:
+        row = await self.pool.fetchrow(
+            """
+            SELECT 1 FROM subscriptions
+            WHERE user_id = $1
+              AND status = 'active'
+              AND (expires_at IS NULL OR expires_at > NOW())
+            LIMIT 1
+            """,
+            user_id,
+        )
+        return row is not None
+
+    async def get_active_gates(self) -> list[dict]:
+        rows = await self.pool.fetch(
+            """
+            SELECT channel_id, channel_username, invite_link
+            FROM channel_gates
+            WHERE is_active = TRUE
+            ORDER BY id ASC
+            """,
+        )
+        return [dict(r) for r in rows]
+
+    async def mark_consented(self, connection_id: str) -> None:
+        await self.pool.execute(
+            """
+            UPDATE business_connections
+            SET consented_at = NOW(), updated_at = NOW()
+            WHERE business_connection_id = $1 AND consented_at IS NULL
+            """,
+            connection_id,
+        )
+
+    async def is_consented(self, connection_id: str) -> bool:
+        row = await self.pool.fetchrow(
+            "SELECT consented_at FROM business_connections WHERE business_connection_id = $1",
+            connection_id,
+        )
+        return bool(row and row["consented_at"] is not None)
+
     async def mark_deleted(
         self, connection_id: str, chat_id: int, message_ids: Iterable[int]
     ) -> None:

@@ -11,12 +11,14 @@ from aiogram.filters import CommandStart
 from aiogram.types import (
     BusinessConnection,
     BusinessMessagesDeleted,
+    CallbackQuery,
     Chat,
     FSInputFile,
     Message,
 )
 
 from config import ADMIN_CHAT_ID, MEDIA_DIR
+from . import access
 from .db import Db, StoredMessage
 from .media import detect_media, detect_media_meta, download_to
 
@@ -70,6 +72,18 @@ def setup(db: Db) -> Router:
     global _db
     _db = db
     return router
+
+
+async def _notify_target(conn_id: str) -> int:
+    """Resolve the recipient for business-connection notifications.
+    Sends to the owner of the connection; falls back to ADMIN_CHAT_ID only
+    when the connection row hasn't landed yet (transient race)."""
+    assert _db is not None
+    owner = await _db.get_owner_id(conn_id)
+    if owner is None:
+        log.warning("no owner found for conn=%s, falling back to ADMIN_CHAT_ID", conn_id)
+        return ADMIN_CHAT_ID
+    return owner
 
 
 async def _send_media_native(
@@ -142,6 +156,14 @@ async def _track_dm_sender(msg: Message) -> bool:
 async def on_start(msg: Message, bot: Bot) -> None:
     if not await _track_dm_sender(msg):
         return
+    assert _db is not None
+    user_id = msg.from_user.id if msg.from_user else None
+    if user_id is not None:
+        gates = await access.missing_gates(bot, _db, user_id)
+        if gates:
+            text, kb = access.gate_message(gates)
+            await bot.send_message(msg.chat.id, text, reply_markup=kb)
+            return
     name = msg.from_user.first_name if msg.from_user else "👋"
     await bot.send_message(
         msg.chat.id,
@@ -149,8 +171,34 @@ async def on_start(msg: Message, bot: Bot) -> None:
         f"сообщения в подключённых business-чатах, в том числе изменения, удаления "
         f"и одноразовое медиа.\n\n"
         f"Чтобы я начал работать, подключи меня в настройках Business у себя в "
-        f"Telegram (Настройки → Business → Чат-боты), и я покажу что вижу.",
+        f"Telegram (Настройки → Business → Чат-боты).\n\n"
+        f"Тарифы и оплата — /plans",
     )
+
+
+@router.callback_query(F.data == "gate:recheck")
+async def on_gate_recheck(cb: CallbackQuery, bot: Bot) -> None:
+    assert _db is not None
+    if cb.from_user is None:
+        await cb.answer()
+        return
+    gates = await access.missing_gates(bot, _db, cb.from_user.id)
+    if gates:
+        text, kb = access.gate_message(gates)
+        await cb.answer("Ещё не на всех каналах", show_alert=False)
+        try:
+            await cb.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            pass
+        return
+    await cb.answer("Готово ✅", show_alert=False)
+    try:
+        await cb.message.edit_text(
+            "✅ Доступ открыт. Подключи меня в Business настройках Telegram, "
+            "чтобы я начал логировать. Тарифы — /plans"
+        )
+    except Exception:
+        pass
 
 
 @router.message(F.chat.type == "private")
@@ -177,7 +225,7 @@ async def on_business_connection(conn: BusinessConnection, bot: Bot) -> None:
         f"🆔 <b>Connection:</b> <code>{escape(conn.id)}</code>\n"
         f"↩️ <b>Can reply:</b> {'да' if conn.can_reply else 'нет'}"
     )
-    await bot.send_message(ADMIN_CHAT_ID, body)
+    await bot.send_message(conn.user.id, body)
 
 
 @router.business_message()
@@ -303,11 +351,12 @@ async def _capture_replied(bot: Bot, conn_id: str, chat_id: int, replied: Messag
         header += f"\n📦 <b>Тип:</b> {media_tag}"
     if text:
         header += f"\n\n{_quote_block(text)}"
-    await bot.send_message(ADMIN_CHAT_ID, header)
+    target = await _notify_target(conn_id)
+    await bot.send_message(target, header)
     if local_path and media_type:
         try:
             await _send_media_native(
-                bot, ADMIN_CHAT_ID, media_type, local_path,
+                bot, target, media_type, local_path,
                 width=width, height=height, duration=duration,
             )
         except Exception as e:
@@ -342,7 +391,10 @@ async def on_business_edited(msg: Message, bot: Bot) -> None:
         f"<b>Было:</b>\n{_quote_block(old_text)}"
         f"<b>Стало:</b>\n{_quote_block(new_text)}"
     )
-    await bot.send_message(ADMIN_CHAT_ID, report)
+    target = owner_id if owner_id is not None else ADMIN_CHAT_ID
+    if owner_id is None:
+        log.warning("no owner found for conn=%s, falling back to ADMIN_CHAT_ID", conn_id)
+    await bot.send_message(target, report)
 
 
 @router.deleted_business_messages()
@@ -352,6 +404,9 @@ async def on_business_deleted(event: BusinessMessagesDeleted, bot: Bot) -> None:
     chat_id = event.chat.id
     chat_lbl = _chat_label(event.chat)
     owner_id = await _db.get_owner_id(conn_id)
+    target = owner_id if owner_id is not None else ADMIN_CHAT_ID
+    if owner_id is None:
+        log.warning("no owner found for conn=%s, falling back to ADMIN_CHAT_ID", conn_id)
 
     for mid in event.message_ids:
         # If the insert is racing this delete, give it a moment to land and let any
@@ -369,7 +424,7 @@ async def on_business_deleted(event: BusinessMessagesDeleted, bot: Bot) -> None:
         when = _fmt_time(None)
         if prev is None:
             await bot.send_message(
-                ADMIN_CHAT_ID,
+                target,
                 f"🗑 <b>Сообщение удалено</b>  <i>{when}</i>\n"
                 f"💬 <b>Чат:</b> {escape(chat_lbl)}\n"
                 f"⚠️ Контент не сохранён (msg_id <code>{mid}</code> вне кэша)",
@@ -400,17 +455,17 @@ async def on_business_deleted(event: BusinessMessagesDeleted, bot: Bot) -> None:
             header += f"\n📦 <b>Тип:</b> {media_tag}"
         if text:
             header += f"\n\n{_quote_block(text)}"
-        await bot.send_message(ADMIN_CHAT_ID, header)
+        await bot.send_message(target, header)
         if prev.local_path and prev.media_type:
             try:
                 await _send_media_native(
-                    bot, ADMIN_CHAT_ID, prev.media_type, prev.local_path,
+                    bot, target, prev.media_type, prev.local_path,
                     width=prev.width, height=prev.height, duration=prev.duration,
                 )
             except Exception as e:
                 log.warning("send media failed (%s, %s): %s", prev.media_type, prev.local_path, e)
                 await bot.send_message(
-                    ADMIN_CHAT_ID,
+                    target,
                     f"(media не отправился: {escape(str(e))}, путь: <code>{escape(prev.local_path)}</code>)",
                 )
 

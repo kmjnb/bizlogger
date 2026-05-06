@@ -12,13 +12,26 @@ from aiogram.enums import ParseMode
 from bot.broadcaster import Broadcaster
 from bot.db import Db
 from bot.handlers import setup
-from config import BOT_TOKEN, DATABASE_URL
+from bot.payments import setup as setup_payments
+from config import BOT_TOKEN, DATABASE_URL, SENTRY_DSN
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 log = logging.getLogger("bizlogger")
+
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            traces_sample_rate=0.05,
+            send_default_pii=False,
+        )
+        log.info("Sentry initialized")
+    except Exception as e:
+        log.warning("Sentry init failed: %s", e)
 
 
 async def main() -> None:
@@ -42,6 +55,7 @@ async def main() -> None:
 
     dp = Dispatcher()
     dp.include_router(setup(db))
+    dp.include_router(setup_payments(db))
 
     broadcaster = Broadcaster(bot, db.pool)
     broadcaster.start()
@@ -52,6 +66,8 @@ async def main() -> None:
             bot,
             allowed_updates=[
                 "message",
+                "callback_query",
+                "pre_checkout_query",
                 "business_connection",
                 "business_message",
                 "edited_business_message",

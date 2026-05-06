@@ -2,3 +2,4 @@ aiogram>=3.4,<4
 aiohttp-socks>=0.10
 asyncpg>=0.29
 python-dotenv>=1.0
+sentry-sdk>=2.0
